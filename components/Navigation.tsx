@@ -40,11 +40,13 @@ type MenuGroup = {
 
 export function Navigation({ view, onViewChange, onLogout }: NavigationProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [mobileOpenGroup, setMobileOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
 
   const close = () => {
     setOpenMenu(null);
+    setMobileOpenGroup(null);
     setMobileOpen(false);
   };
 
@@ -277,35 +279,35 @@ export function Navigation({ view, onViewChange, onLogout }: NavigationProps) {
 
           <div className="grid gap-2 sm:grid-cols-2">
             {groups.map((group) => {
-              const isOpen = openMenu === group.label;
+              const isOpen = mobileOpenGroup === group.label;
               return (
-                <div key={group.label} className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden">
+                <div key={group.label} className="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setOpenMenu(isOpen ? null : group.label)}
-                    className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-medium text-slate-300"
+                    onClick={() => setMobileOpenGroup(isOpen ? null : group.label)}
+                    className="flex w-full items-center justify-between px-3.5 py-3 text-left text-xs font-medium text-slate-200 active:bg-slate-800"
                   >
                     <span className="flex items-center gap-2">
-                      <group.icon size={14} className="text-cyan-300" />
+                      <group.icon size={15} className="text-cyan-300" />
                       {group.label}
                     </span>
-                    <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown size={15} className={`transition-transform duration-200 ${isOpen ? "rotate-180 text-cyan-300" : "text-slate-400"}`} />
                   </button>
 
                   {isOpen && (
-                    <div className="border-t border-slate-800/80 bg-slate-900/50 px-2 py-2 space-y-1">
+                    <div className="border-t border-slate-800/80 bg-slate-900/80 px-2 py-2 space-y-1">
                       {group.items.map((item) => (
                         <button
                           key={item.label}
                           type="button"
                           onClick={() => choose(item)}
-                          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition ${
                             item.view === view
-                              ? "bg-slate-800 text-cyan-200 font-medium"
-                              : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                              ? "bg-slate-800 text-cyan-200 font-semibold"
+                              : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
                           }`}
                         >
-                          <item.icon size={14} />
+                          <item.icon size={14} className={item.view === view ? "text-cyan-300" : "text-slate-400"} />
                           {item.label}
                         </button>
                       ))}

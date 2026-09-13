@@ -1689,7 +1689,17 @@ export function CalendarHistoryView() {
   const [calMonth, setCalMonth] = useState<{ year: number; month: number }>({ year: initialYear, month: initialMonth });
 
   const record = dashboard.historyRecords.find((r) => r.date === selectedDate) ?? null;
-  const isMissing = record === null || record.steps === null || record.mood === null;
+  const hasJournalNote = Boolean(record?.journalNote && record.journalNote.trim().length > 0);
+  const hasMetricsData = record !== null && (
+    record.sleepHours !== null ||
+    record.busyHours !== null ||
+    record.steps !== null ||
+    record.exerciseDuration !== null ||
+    record.mood !== null ||
+    record.calories !== null ||
+    (record.meals && record.meals.length > 0)
+  );
+  const isMissing = record === null || (!hasJournalNote && !hasMetricsData);
 
   // Journal Note State — strictly bound to selectedDate
   const [journalInput, setJournalInput] = useState<string>("");
@@ -1832,7 +1842,17 @@ export function CalendarHistoryView() {
               const dateStr = formatDate(calMonth.year, calMonth.month, day);
               const dayRec = dashboard.historyRecords.find((r) => r.date === dateStr);
               const hasRecord = !!dayRec;
-              const isMissing = dayRec ? dayRec.steps === null || dayRec.mood === null : false;
+              const dayHasJournal = Boolean(dayRec?.journalNote && dayRec.journalNote.trim().length > 0);
+              const dayHasMetrics = dayRec !== undefined && dayRec !== null && (
+                dayRec.sleepHours !== null ||
+                dayRec.busyHours !== null ||
+                dayRec.steps !== null ||
+                dayRec.exerciseDuration !== null ||
+                dayRec.mood !== null ||
+                dayRec.calories !== null ||
+                (dayRec.meals && dayRec.meals.length > 0)
+              );
+              const dayIsMissing = !dayRec || (!dayHasJournal && !dayHasMetrics);
               const isSelected = selectedDate === dateStr;
               const isToday = dateStr === today;
               const in90Days = isWithin90Days(dateStr, today);
@@ -1845,18 +1865,18 @@ export function CalendarHistoryView() {
                   onClick={() => handleSelectDate(dateStr)}
                   className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium transition
                     ${isSelected ? "bg-white text-black shadow-md font-bold" : ""}
-                    ${!isSelected && isMissing ? "bg-amber-400/10 text-amber-300 border border-amber-400/30" : ""}
-                    ${!isSelected && hasRecord && !isMissing ? "text-slate-200 hover:bg-slate-800" : ""}
+                    ${!isSelected && hasRecord && dayIsMissing ? "bg-amber-400/10 text-amber-300 border border-amber-400/30" : ""}
+                    ${!isSelected && hasRecord && !dayIsMissing ? "text-slate-200 hover:bg-slate-800" : ""}
                     ${!isSelected && !hasRecord && in90Days ? "text-slate-300 hover:bg-slate-800/80 border border-dashed border-slate-700/60 cursor-pointer" : ""}
                     ${!in90Days ? "text-slate-700 cursor-not-allowed opacity-40" : "cursor-pointer"}
                     ${isToday && !isSelected ? "ring-1 ring-cyan-400/60" : ""}
                   `}
                 >
                   {day}
-                  {hasRecord && !isMissing && !isSelected && (
+                  {hasRecord && !dayIsMissing && !isSelected && (
                     <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-emerald-400/60" />
                   )}
-                  {isMissing && !isSelected && (
+                  {hasRecord && dayIsMissing && !isSelected && (
                     <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-amber-400/80" />
                   )}
                 </button>
