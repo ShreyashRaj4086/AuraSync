@@ -1,6 +1,8 @@
 "use client";
 
 import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { formatDisplayName, getFirstName } from "@/lib/utils";
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Activity,
@@ -93,102 +95,12 @@ export type DayRecord = {
   journalNote?: string | null;
 };
 
-export const initialHistoryDays: DayRecord[] = [
-  {
-    date: "2026-08-25",
-    sleepHours: 7.5, busyHours: 6, steps: 9200, exerciseDuration: 40, mood: "Good", calories: 1940,
-    journalNote: "Great energy during morning walk. Work schedule was manageable.",
-    meals: [{ name: "Oatmeal & blueberries", calories: 320, time: "08:10" }, { name: "Grilled chicken wrap", calories: 580, time: "13:00" }, { name: "Salmon & quinoa bowl", calories: 640, time: "19:30" }, { name: "Apple & almonds", calories: 200, time: "16:00" }],
-  },
-  {
-    date: "2026-08-26",
-    sleepHours: 6.5, busyHours: 8.5, steps: 7800, exerciseDuration: 25, mood: "Fine", calories: 2050,
-    journalNote: "Slightly elevated work stress. Maintained decent focus through afternoon.",
-    meals: [{ name: "Greek yogurt parfait", calories: 380, time: "07:45" }, { name: "Turkey sandwich", calories: 620, time: "12:30" }, { name: "Pasta primavera", calories: 750, time: "20:00" }, { name: "Protein shake", calories: 200, time: "16:30" }],
-  },
-  {
-    date: "2026-08-27",
-    sleepHours: 8, busyHours: 4.5, steps: 11000, exerciseDuration: 60, mood: "Extremely Good", calories: 1820,
-    journalNote: "Restorative 8 hours of sleep. High productivity and great mood throughout the day.",
-    meals: [{ name: "Avocado toast & eggs", calories: 450, time: "08:30" }, { name: "Tuna salad", calories: 420, time: "12:00" }, { name: "Stir-fry vegetables & tofu", calories: 580, time: "19:00" }, { name: "Mixed nuts", calories: 180, time: "15:00" }],
-  },
-  {
-    date: "2026-08-28",
-    sleepHours: 7, busyHours: 9, steps: 6500, exerciseDuration: 0, mood: "Bad", calories: 2230,
-    journalNote: "Long meetings and heavy routine load. Felt sluggish by evening.",
-    meals: [{ name: "Cereal & milk", calories: 290, time: "09:00" }, { name: "Fast food burger", calories: 850, time: "13:00" }, { name: "Pizza slices (×2)", calories: 820, time: "20:30" }, { name: "Cookies", calories: 270, time: "16:00" }],
-  },
-  {
-    date: "2026-08-29",
-    sleepHours: 7.5, busyHours: 6.5, steps: 8900, exerciseDuration: 35, mood: "Good", calories: 1990,
-    journalNote: "Balanced day. Good hydration and steady pace.",
-    meals: [{ name: "Smoothie bowl", calories: 360, time: "08:00" }, { name: "Chicken Caesar wrap", calories: 560, time: "12:45" }, { name: "Grilled salmon", calories: 620, time: "19:15" }, { name: "Granola bar", calories: 150, time: "15:30" }],
-  },
-  {
-    date: "2026-08-30",
-    sleepHours: 9, busyHours: 3, steps: 12000, exerciseDuration: 75, mood: "Extremely Good", calories: 1760,
-    journalNote: "Weekend rest day. Spent hours outdoors in nature.",
-    meals: [{ name: "Pancakes with berries", calories: 480, time: "09:30" }, { name: "Greek salad", calories: 380, time: "13:30" }, { name: "Roast chicken & veg", calories: 680, time: "18:30" }, { name: "Protein bar", calories: 120, time: "16:00" }],
-  },
-  {
-    date: "2026-08-31",
-    sleepHours: 6, busyHours: 10, steps: 5200, exerciseDuration: 0, mood: "Extremely Bad", calories: 2380,
-    journalNote: "Poor sleep quality combined with 10h workload crunch.",
-    meals: [{ name: "Coffee only", calories: 80, time: "07:30" }, { name: "Takeout noodles", calories: 900, time: "14:00" }, { name: "Large pizza", calories: 1100, time: "21:00" }, { name: "Energy drink", calories: 200, time: "10:00" }],
-  },
-  // GAP WEEK: Sep 1–7, 2026 — activity and mood records missing
-  { date: "2026-09-01", sleepHours: 7, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-02", sleepHours: 6.5, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-03", sleepHours: 8, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-04", sleepHours: 7.5, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-05", sleepHours: 7, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-06", sleepHours: 8.5, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  { date: "2026-09-07", sleepHours: 6.5, busyHours: null, steps: null, exerciseDuration: null, mood: null, calories: null, meals: [], journalNote: null },
-  // Post-gap: Sep 8–13
-  {
-    date: "2026-09-08",
-    sleepHours: 7.5, busyHours: 5.5, steps: 8800, exerciseDuration: 30, mood: "Fine", calories: 1960,
-    journalNote: "Resumed tracking after system outage. Smooth transition back to routine.",
-    meals: [{ name: "Overnight oats", calories: 340, time: "08:00" }, { name: "Veggie wrap", calories: 520, time: "12:30" }, { name: "Baked cod & potatoes", calories: 680, time: "19:30" }, { name: "Orange & nuts", calories: 180, time: "15:00" }],
-  },
-  {
-    date: "2026-09-09",
-    sleepHours: 8, busyHours: 7, steps: 9500, exerciseDuration: 45, mood: "Good", calories: 2010,
-    journalNote: "Good workout energy. Sleep was uninterrupted.",
-    meals: [{ name: "Eggs & toast", calories: 420, time: "08:30" }, { name: "Lentil soup & bread", calories: 560, time: "13:00" }, { name: "Chicken stir-fry", calories: 720, time: "19:00" }, { name: "Yogurt", calories: 120, time: "16:00" }],
-  },
-  {
-    date: "2026-09-10",
-    sleepHours: 6, busyHours: 9.5, steps: 6800, exerciseDuration: 0, mood: "Bad", calories: 2200,
-    journalNote: "Heavy work surge day. Missed evening exercise session.",
-    meals: [{ name: "Banana & coffee", calories: 200, time: "07:15" }, { name: "Fast-food combo", calories: 980, time: "12:00" }, { name: "Takeout curry & rice", calories: 860, time: "20:30" }, { name: "Chips", calories: 320, time: "15:30" }],
-  },
-  {
-    date: "2026-09-11",
-    sleepHours: 7.5, busyHours: 6, steps: 8200, exerciseDuration: 40, mood: "Fine", calories: 1880,
-    journalNote: "Consistent pace. Met daily calorie target comfortably.",
-    meals: [{ name: "Muesli & milk", calories: 360, time: "08:00" }, { name: "Tuna salad bowl", calories: 480, time: "12:30" }, { name: "Grilled steak & salad", calories: 740, time: "19:00" }, { name: "Fruit", calories: 120, time: "15:30" }],
-  },
-  {
-    date: "2026-09-12",
-    sleepHours: 7, busyHours: 8, steps: 7600, exerciseDuration: 30, mood: "Fine", calories: 1930,
-    journalNote: "Productive Saturday work sprint followed by evening relax.",
-    meals: [{ name: "Greek yogurt & berries", calories: 284, time: "08:14" }, { name: "Grilled salmon bowl", calories: 512, time: "12:38" }, { name: "Vegetable curry & rice", calories: 680, time: "19:45" }, { name: "Dark chocolate", calories: 180, time: "16:00" }],
-  },
-  {
-    date: "2026-09-13",
-    sleepHours: 7.5, busyHours: 6, steps: 8500, exerciseDuration: 45, mood: "Fine", calories: 1930,
-    journalNote: "Focusing on balanced nutrition and consistent exercise habits.",
-    meals: [{ name: "Greek yogurt & berries", calories: 284, time: "08:14" }, { name: "Grilled salmon bowl", calories: 512, time: "12:38" }, { name: "Chicken & quinoa", calories: 660, time: "19:30" }, { name: "Mixed nuts", calories: 140, time: "15:30" }],
-  },
-];
+export const initialHistoryDays: DayRecord[] = [];
 
-export const HISTORY_DATES = initialHistoryDays.map((d) => d.date).sort();
-
-const GAP_DATES = new Set(["2026-09-01","2026-09-02","2026-09-03","2026-09-04","2026-09-05","2026-09-06","2026-09-07"]);
+export const HISTORY_DATES: string[] = [];
 
 export function isGapDate(dateStr: string): boolean {
-  return GAP_DATES.has(dateStr);
+  return false;
 }
 
 function safeAvg(values: (number | null)[]): number | null {
@@ -313,10 +225,45 @@ export function OverviewView({
   onViewChange: (view: View) => void;
 }) {
   const dashboard = useDashboard();
+
+  // Profile Input Details State
+  const [profileAge, setProfileAge] = useState(dashboard.age || "");
+  const [profileHeight, setProfileHeight] = useState(dashboard.height || "");
+  const [profileWeight, setProfileWeight] = useState(dashboard.weight || "");
+  const [profileGender, setProfileGender] = useState<"female" | "male" | "">(dashboard.gender || "");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileSavedNotice, setProfileSavedNotice] = useState(false);
+
+  useEffect(() => {
+    if (dashboard.age) setProfileAge(dashboard.age);
+    if (dashboard.height) setProfileHeight(dashboard.height);
+    if (dashboard.weight) setProfileWeight(dashboard.weight);
+    if (dashboard.gender) setProfileGender(dashboard.gender);
+  }, [dashboard.age, dashboard.height, dashboard.weight, dashboard.gender]);
+
+  const handleSaveBiometricProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileAge || !profileHeight || !profileWeight || !profileGender) {
+      alert("Please fill in Age, Height, Weight, and select Gender.");
+      return;
+    }
+    dashboard.setAge(profileAge);
+    dashboard.setHeight(profileHeight);
+    dashboard.setWeight(profileWeight);
+    dashboard.setGender(profileGender);
+    dashboard.completeSetup();
+    setIsEditingProfile(false);
+    setProfileSavedNotice(true);
+    setTimeout(() => setProfileSavedNotice(false), 4000);
+  };
+
+  const isProfileIncomplete = !dashboard.isSetupComplete || !dashboard.height || !dashboard.weight || !dashboard.age || !dashboard.gender;
+  const showSetupCard = isProfileIncomplete || isEditingProfile;
+
   const hasMetrics = metrics !== null;
   const targetVal = hasMetrics ? metrics.target : 2000;
   const balance = targetVal - consumed;
-  const currentWeight = dashboard.weight || "68";
+  const currentWeight = dashboard.weight || "--";
 
   const { completedGuideItems, toggleGuideItem } = dashboard;
 
@@ -403,7 +350,7 @@ export function OverviewView({
               <Sparkles size={14} /> Personal Info & Progress Dashboard
             </div>
             <h2 className="text-3xl font-medium tracking-tight text-white">
-              Welcome back, {dashboard.profileName || "Shreyash Raj"}
+              Welcome, {getFirstName(dashboard.profileName)}!
             </h2>
             <p className="mt-1 text-xs text-slate-400">
               Primary Goal: <strong className="text-cyan-300">{dashboard.primaryGoal || "Maintenance"}</strong> · Stress Level: <strong className="text-amber-300">{dashboard.stressLevel || "Moderate"}</strong>
@@ -427,6 +374,141 @@ export function OverviewView({
             </button>
           </div>
         </div>
+
+        {/* Saved Notice Banner */}
+        {profileSavedNotice && (
+          <div className="mt-4 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-xs text-emerald-200 flex items-center justify-between">
+            <span>✓ Biometric profile (Age, Height, Weight, Gender) saved successfully! Your baseline metrics have been initialized.</span>
+          </div>
+        )}
+
+        {/* Profile Input Details Section (Age, Height, Weight, Gender) */}
+        {showSetupCard ? (
+          <div className="mt-6 rounded-2xl border border-cyan-400/40 bg-slate-950/80 p-5 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2 text-cyan-300 text-xs font-semibold uppercase tracking-wider">
+                  <Sparkles size={14} /> Set Baseline Details
+                </div>
+                <h3 className="text-lg font-medium text-white mt-0.5">Account Biometric Setup</h3>
+                <p className="text-xs text-slate-400">Enter your age, height, weight, and gender to set your default values and metabolic target.</p>
+              </div>
+              {!isProfileIncomplete && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingProfile(false)}
+                  className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-800"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveBiometricProfile} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Age (Years)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    placeholder="e.g. 25"
+                    value={profileAge}
+                    onChange={(e) => setProfileAge(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-sm text-white outline-none focus:border-cyan-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Height (cm)</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="250"
+                    placeholder="e.g. 175"
+                    value={profileHeight}
+                    onChange={(e) => setProfileHeight(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-sm text-white outline-none focus:border-cyan-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Weight (kg)</label>
+                  <input
+                    type="number"
+                    min="20"
+                    max="300"
+                    step="0.1"
+                    placeholder="e.g. 70"
+                    value={profileWeight}
+                    onChange={(e) => setProfileWeight(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-sm text-white outline-none focus:border-cyan-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Gender</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProfileGender("male")}
+                      className={`py-2 text-xs font-medium rounded-xl border transition ${
+                        profileGender === "male"
+                          ? "border-cyan-400 bg-cyan-400/20 text-cyan-200"
+                          : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Male
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfileGender("female")}
+                      className={`py-2 text-xs font-medium rounded-xl border transition ${
+                        profileGender === "female"
+                          ? "border-cyan-400 bg-cyan-400/20 text-cyan-200"
+                          : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Female
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+                <span className="text-[11px] text-slate-400">Saved values persist permanently across sessions.</span>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition active:scale-95"
+                >
+                  Save Biometric Profile
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="mt-4 flex items-center justify-between flex-wrap gap-3 p-3.5 rounded-2xl border border-slate-800 bg-slate-950/60 text-xs">
+            <div className="flex items-center gap-4 flex-wrap text-slate-300">
+              <div><span className="text-slate-400">Age:</span> <strong className="text-white font-mono">{dashboard.age} yrs</strong></div>
+              <div><span className="text-slate-400">Height:</span> <strong className="text-white font-mono">{dashboard.height} cm</strong></div>
+              <div><span className="text-slate-400">Weight:</span> <strong className="text-white font-mono">{dashboard.weight} kg</strong></div>
+              <div><span className="text-slate-400">Gender:</span> <strong className="text-white capitalize">{dashboard.gender}</strong></div>
+              {dashboard.metrics && (
+                <div><span className="text-slate-400">Target:</span> <strong className="text-cyan-300 font-mono">{Math.round(dashboard.metrics.target)} kcal/day</strong></div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingProfile(true)}
+              className="text-xs text-cyan-300 hover:text-cyan-200 underline font-medium"
+            >
+              Edit Profile Details
+            </button>
+          </div>
+        )}
 
         {/* Feature 1: Week-at-a-Glance Calorie Progress Bar / Pills */}
         <div className="mt-6">
@@ -1593,9 +1675,18 @@ export function UnifiedTrendScorecardsView({
    ========================================================================= */
 export function CalendarHistoryView() {
   const dashboard = useDashboard();
-  const today = "2026-09-13";
-  const [selectedDate, setSelectedDate] = useState<string>(today);
-  const [calMonth, setCalMonth] = useState<{ year: number; month: number }>({ year: 2026, month: 9 });
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const today = new Date().toISOString().split("T")[0];
+  const dateParam = searchParams.get("date");
+  const selectedDate = dateParam || today;
+
+  const initialD = new Date(selectedDate + "T12:00:00");
+  const initialYear = isNaN(initialD.getFullYear()) ? new Date().getFullYear() : initialD.getFullYear();
+  const initialMonth = isNaN(initialD.getMonth()) ? new Date().getMonth() + 1 : initialD.getMonth() + 1;
+
+  const [calMonth, setCalMonth] = useState<{ year: number; month: number }>({ year: initialYear, month: initialMonth });
 
   const record = dashboard.historyRecords.find((r) => r.date === selectedDate) ?? null;
   const isMissing = record === null || record.steps === null || record.mood === null;
@@ -1605,28 +1696,45 @@ export function CalendarHistoryView() {
   const [journalSaved, setJournalSaved] = useState<boolean>(false);
 
   // Record Form State (Sleep, Mood, Busy Hours, Steps, Exercise Duration, Calories)
-  const [recSleep, setRecSleep] = useState("7.5");
-  const [recBusy, setRecBusy] = useState("6.0");
-  const [recSteps, setRecSteps] = useState("8500");
-  const [recExDuration, setRecExDuration] = useState("45");
-  const [recMood, setRecMood] = useState("Good");
-  const [recCalories, setRecCalories] = useState("1950");
+  const [recSleep, setRecSleep] = useState("");
+  const [recBusy, setRecBusy] = useState("");
+  const [recSteps, setRecSteps] = useState("");
+  const [recExDuration, setRecExDuration] = useState("");
+  const [recMood, setRecMood] = useState("");
+  const [recCalories, setRecCalories] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isEditingRecord, setIsEditingRecord] = useState(false);
+
+  useEffect(() => {
+    if (selectedDate) {
+      const d = new Date(selectedDate + "T12:00:00");
+      if (!isNaN(d.getFullYear())) {
+        setCalMonth({ year: d.getFullYear(), month: d.getMonth() + 1 });
+      }
+      dashboard.fetchCalendarRecord(selectedDate);
+    }
+  }, [selectedDate]);
 
   useEffect(() => {
     const currentRec = dashboard.historyRecords.find((r) => r.date === selectedDate);
     setJournalInput(currentRec?.journalNote ?? "");
     setJournalSaved(false);
 
-    setRecSleep(currentRec?.sleepHours !== null && currentRec?.sleepHours !== undefined ? currentRec.sleepHours.toString() : "7.5");
-    setRecBusy(currentRec?.busyHours !== null && currentRec?.busyHours !== undefined ? currentRec.busyHours.toString() : "6.0");
-    setRecSteps(currentRec?.steps !== null && currentRec?.steps !== undefined ? currentRec.steps.toString() : "8500");
-    setRecExDuration(currentRec?.exerciseDuration !== null && currentRec?.exerciseDuration !== undefined ? currentRec.exerciseDuration.toString() : "45");
-    setRecMood(currentRec?.mood || "Good");
-    setRecCalories(currentRec?.calories !== null && currentRec?.calories !== undefined ? currentRec.calories.toString() : "1950");
+    setRecSleep(currentRec?.sleepHours !== null && currentRec?.sleepHours !== undefined ? currentRec.sleepHours.toString() : "");
+    setRecBusy(currentRec?.busyHours !== null && currentRec?.busyHours !== undefined ? currentRec.busyHours.toString() : "");
+    setRecSteps(currentRec?.steps !== null && currentRec?.steps !== undefined ? currentRec.steps.toString() : "");
+    setRecExDuration(currentRec?.exerciseDuration !== null && currentRec?.exerciseDuration !== undefined ? currentRec.exerciseDuration.toString() : "");
+    setRecMood(currentRec?.mood || "");
+    setRecCalories(currentRec?.calories !== null && currentRec?.calories !== undefined ? currentRec.calories.toString() : "");
     setIsEditingRecord(false);
   }, [selectedDate, dashboard.historyRecords]);
+
+  const handleSelectDate = (dateStr: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", "calendar");
+    params.set("date", dateStr);
+    router.push(`/?${params.toString()}`);
+  };
 
   const handleSaveJournalNote = () => {
     dashboard.updateHistoryRecord(selectedDate, { journalNote: journalInput });
@@ -1636,14 +1744,20 @@ export function CalendarHistoryView() {
 
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
+    const sleep = recSleep ? parseFloat(recSleep) : null;
+    const busy = recBusy ? parseFloat(recBusy) : null;
+    const stp = recSteps ? parseInt(recSteps, 10) : null;
+    const exDur = recExDuration ? parseInt(recExDuration, 10) : null;
+    const cal = recCalories ? parseInt(recCalories, 10) : null;
+
     dashboard.updateHistoryRecord(selectedDate, {
-      sleepHours: parseFloat(recSleep) || 7.5,
-      busyHours: parseFloat(recBusy) || 6.0,
-      steps: parseInt(recSteps, 10) || 8500,
-      exerciseDuration: parseInt(recExDuration, 10) || 45,
-      mood: recMood,
-      calories: parseInt(recCalories, 10) || 1950,
-      meals: record?.meals?.length ? record.meals : [{ name: "User logged entry", calories: parseInt(recCalories, 10) || 1950, time: "12:00" }],
+      sleepHours: sleep,
+      busyHours: busy,
+      steps: stp,
+      exerciseDuration: exDur,
+      mood: recMood || null,
+      calories: cal,
+      meals: record?.meals?.length ? record.meals : (cal ? [{ name: "User logged entry", calories: cal, time: "12:00" }] : []),
     });
     setSaveSuccess(true);
     setIsEditingRecord(false);
@@ -1728,7 +1842,7 @@ export function CalendarHistoryView() {
                   key={dateStr}
                   type="button"
                   disabled={!in90Days}
-                  onClick={() => setSelectedDate(dateStr)}
+                  onClick={() => handleSelectDate(dateStr)}
                   className={`relative flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium transition
                     ${isSelected ? "bg-white text-black shadow-md font-bold" : ""}
                     ${!isSelected && isMissing ? "bg-amber-400/10 text-amber-300 border border-amber-400/30" : ""}
@@ -2224,7 +2338,11 @@ export function DailyLogsView({ meals, setMeals }: { meals: Meal[]; setMeals: Di
             </div>
           ))
         ) : (
-          <p className="py-16 text-center text-sm text-slate-500">No meals logged yet today.</p>
+          <div className="py-12 text-center text-sm">
+            <Utensils size={28} className="mx-auto mb-2.5 text-slate-600" />
+            <p className="text-slate-300 font-medium">No meals logged yet today.</p>
+            <p className="mt-1 text-xs text-slate-500">Click &ldquo;Vision Scanner&rdquo; or &ldquo;Manual Entry&rdquo; to add your first meal!</p>
+          </div>
         )}
       </div>
     </Panel>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, createContext, RefObject, useContext, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Meal, Metrics, DayRecord, initialHistoryDays } from "@/components/dashboard/Views";
 
 export type ActivityEntry = {
@@ -26,17 +27,22 @@ export const MET_MAP: Record<string, number> = {
   "Running": 9.0,
 };
 
-const STORAGE_KEY = "aurasync_dashboard_state_v1";
+const getAccountStorageKey = (userEmail?: string | null) => {
+  if (userEmail && userEmail.trim()) {
+    return `aurasync_state_${userEmail.toLowerCase().trim()}`;
+  }
+  if (typeof window !== "undefined") {
+    const activeSession = localStorage.getItem("aurasync-session");
+    if (activeSession && activeSession.trim()) {
+      return `aurasync_state_${activeSession.toLowerCase().trim()}`;
+    }
+  }
+  return "aurasync_dashboard_state_v1";
+};
 
-const initialMeals: Meal[] = [
-  { id: 1, name: "Greek yogurt, berries & seeds", calories: 284, source: "MANUAL", grams: 200, time: "08:14" },
-  { id: 2, name: "Grilled salmon bowl", calories: 512, source: "VISION", grams: 340, time: "12:38" },
-];
+const initialMeals: Meal[] = [];
 
-const initialActivities: ActivityEntry[] = [
-  { id: "1", type: "Walking", duration: 0.5, met: 3.5, caloriesBurned: 119 },
-  { id: "2", type: "Gym/Weightlifting", duration: 1.0, met: 5.0, caloriesBurned: 340 },
-];
+const initialActivities: ActivityEntry[] = [];
 
 const safeNumber = (value: string, fallback: number) => {
   const parsed = Number(value);
@@ -52,11 +58,20 @@ export const computeBiometricMetrics = (
   waist: string,
   bodyFat: string,
   activitiesList: ActivityEntry[] = []
-): Metrics => {
-  const safeHeight = safeNumber(height, 172) / 100;
-  const safeWeight = safeNumber(weight, 68);
-  const safeAge = safeNumber(age, 29);
-  const waistToHeight = safeNumber(waist, 80) / (safeHeight * 100);
+): Metrics | null => {
+  const hNum = Number(height);
+  const wNum = Number(weight);
+  const aNum = Number(age);
+
+  if (!hNum || !wNum || !aNum || !gender) {
+    return null;
+  }
+
+  const safeHeight = hNum / 100;
+  const safeWeight = wNum;
+  const safeAge = aNum;
+  const waistVal = Number(waist);
+  const waistToHeight = waistVal > 0 ? waistVal / (safeHeight * 100) : 0.46;
   const bodyFatValue = Number(bodyFat);
   const hasBodyFat = Number.isFinite(bodyFatValue) && bodyFatValue > 0 && bodyFatValue < 100;
 
@@ -154,6 +169,7 @@ export type DashboardContextValue = {
   purgeRecords: () => void;
   historyRecords: DayRecord[];
   updateHistoryRecord: (dateStr: string, data: Partial<DayRecord>) => void;
+  fetchCalendarRecord: (dateStr: string) => Promise<any>;
   primaryGoal: string;
   setPrimaryGoal: (v: string) => void;
   stressLevel: string;
@@ -172,14 +188,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
 
   // Baseline inputs
-  const [height, setHeight] = useState("172");
-  const [weight, setWeight] = useState("68");
-  const [age, setAge] = useState("29");
-  const [gender, setGender] = useState<"female" | "male" | "">("female");
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<"female" | "male" | "">("");
   const [activity, setActivity] = useState("1.375");
-  const [waist, setWaist] = useState("80");
-  const [bodyFat, setBodyFat] = useState("18");
-  const [profileName, setProfileName] = useState("Shreyash Raj");
+  const [waist, setWaist] = useState("");
+  const [bodyFat, setBodyFat] = useState("");
+  const [profileName, setProfileName] = useState("User");
   const [isSetupComplete, setIsSetupComplete] = useState(false);
 
   // Personalized survey & onboarding checklist state
@@ -224,32 +240,71 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setCompletedGuideItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // 1. Hydration-Safe Mount Phase: Load saved state from localStorage (Client-Side Only)
+  const sessionContext = useSession();
+  const session = sessionContext?.data;
+
+  // NextAuth Session sync: Update profileName whenever session user name is present
+  useEffect(() => {
+    if (session?.user?.name) {
+      setProfileName(session.user.name);
+    }
+  }, [session]);
+
+  const userEmail = session?.user?.email;
+
+  // 1. Hydration-Safe Mount & Account Switching Phase: Load saved state from localStorage per user email
   useEffect(() => {
     setIsMounted(true);
     if (typeof window === "undefined") return;
 
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const activeKey = getAccountStorageKey(userEmail);
+      const isNewAccount = localStorage.getItem("aurasync-is-new-account") === "true";
+      const savedUserName = localStorage.getItem("aurasync-user-name");
+
+      if (savedUserName) {
+        setProfileName(savedUserName);
+      } else if (session?.user?.name) {
+        setProfileName(session.user.name);
+      }
+
+      if (isNewAccount) {
+        setHeight("");
+        setWeight("");
+        setAge("");
+        setGender("");
+        setWaist("");
+        setBodyFat("");
+        setIsSetupComplete(false);
+        setMetrics(null);
+        setMeals([]);
+        setActivities([]);
+        setHistoryRecords([]);
+        localStorage.removeItem(activeKey);
+        localStorage.removeItem("aurasync-is-new-account");
+        return;
+      }
+
+      const saved = localStorage.getItem(activeKey);
       if (saved) {
         const data = JSON.parse(saved);
-        if (data.height !== undefined) setHeight(data.height);
-        if (data.weight !== undefined) setWeight(data.weight);
-        if (data.age !== undefined) setAge(data.age);
-        if (data.gender !== undefined) setGender(data.gender);
-        if (data.activity !== undefined) setActivity(data.activity);
-        if (data.waist !== undefined) setWaist(data.waist);
-        if (data.bodyFat !== undefined) setBodyFat(data.bodyFat);
-        if (data.profileName !== undefined) setProfileName(data.profileName);
-        if (data.isSetupComplete !== undefined) setIsSetupComplete(data.isSetupComplete);
+        setHeight(data.height ?? "");
+        setWeight(data.weight ?? "");
+        setAge(data.age ?? "");
+        setGender(data.gender ?? "");
+        setActivity(data.activity ?? "1.375");
+        setWaist(data.waist ?? "");
+        setBodyFat(data.bodyFat ?? "");
+        if (data.profileName && !savedUserName) setProfileName(data.profileName);
+        setIsSetupComplete(Boolean(data.isSetupComplete && data.height && data.weight && data.age && data.gender));
 
         if (data.primaryGoal !== undefined) setPrimaryGoal(data.primaryGoal);
         if (data.stressLevel !== undefined) setStressLevel(data.stressLevel);
         if (data.onboardingDismissed !== undefined) setOnboardingDismissed(data.onboardingDismissed);
         if (data.completedGuideItems !== undefined) setCompletedGuideItems(data.completedGuideItems);
 
-        if (Array.isArray(data.activities)) setActivities(data.activities);
-        if (Array.isArray(data.historyRecords)) setHistoryRecords(data.historyRecords);
+        setActivities(Array.isArray(data.activities) ? data.activities : []);
+        setHistoryRecords(Array.isArray(data.historyRecords) ? data.historyRecords : []);
 
         if (data.sleepHours !== undefined) setSleepHours(data.sleepHours);
         if (data.activityHours !== undefined) setActivityHours(data.activityHours);
@@ -258,18 +313,32 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         if (data.mood !== undefined) setMood(data.mood);
         if (data.customMood !== undefined) setCustomMood(data.customMood);
         if (data.busyHours !== undefined) setBusyHours(data.busyHours);
-        if (Array.isArray(data.meals)) setMeals(data.meals);
+        setMeals(Array.isArray(data.meals) ? data.meals : []);
+      } else {
+        // Unseen/New Account: Initialize pure blank slate!
+        setHeight("");
+        setWeight("");
+        setAge("");
+        setGender("");
+        setWaist("");
+        setBodyFat("");
+        setIsSetupComplete(false);
+        setMetrics(null);
+        setMeals([]);
+        setActivities([]);
+        setHistoryRecords([]);
       }
     } catch (err) {
       console.error("Failed to restore AuraSync state from localStorage:", err);
     }
-  }, []);
+  }, [userEmail]);
 
-  // 2. Hydration-Safe Sync Phase: Save state to localStorage whenever persistent nodes update
+  // 2. Hydration-Safe Sync Phase: Save state to per-account localStorage whenever persistent nodes update
   useEffect(() => {
     if (!isMounted || typeof window === "undefined") return;
 
     try {
+      const activeKey = getAccountStorageKey(userEmail);
       const stateToPersist = {
         height,
         weight,
@@ -295,12 +364,13 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         busyHours,
         meals,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist));
+      localStorage.setItem(activeKey, JSON.stringify(stateToPersist));
     } catch (err) {
       console.error("Failed to save AuraSync state to localStorage:", err);
     }
   }, [
     isMounted,
+    userEmail,
     height,
     weight,
     age,
@@ -376,29 +446,71 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setIsSetupComplete(true);
   };
 
+  const fetchCalendarRecord = async (dateStr: string) => {
+    const userId = session?.user ? ((session.user as any).id || session.user.email || "user") : "user";
+    try {
+      const res = await fetch(`/api/calendar?userId=${encodeURIComponent(userId)}&date=${encodeURIComponent(dateStr)}`);
+      const json = await res.json();
+      if (json?.record) {
+        setHistoryRecords((prev) => {
+          const exists = prev.some((rec) => rec.date === dateStr);
+          if (exists) {
+            return prev.map((rec) => (rec.date === dateStr ? { ...rec, ...json.record } : rec));
+          } else {
+            return [...prev, { date: dateStr, ...json.record }];
+          }
+        });
+        return json.record;
+      }
+    } catch (err) {
+      console.warn("Failed to fetch calendar record from AWS API:", err);
+    }
+    return null;
+  };
+
   const updateHistoryRecord = (dateStr: string, data: Partial<DayRecord>) => {
+    let updatedRecord: DayRecord | null = null;
+
     setHistoryRecords((prev) => {
       const exists = prev.some((rec) => rec.date === dateStr);
       if (exists) {
-        return prev.map((rec) => (rec.date === dateStr ? { ...rec, ...data } : rec));
+        return prev.map((rec) => {
+          if (rec.date === dateStr) {
+            updatedRecord = { ...rec, ...data };
+            return updatedRecord;
+          }
+          return rec;
+        });
       } else {
-        return [
-          ...prev,
-          {
-            date: dateStr,
-            sleepHours: 7.5,
-            busyHours: 6.0,
-            steps: 8500,
-            exerciseDuration: 45,
-            mood: "Fine",
-            calories: 1950,
-            meals: [],
-            journalNote: "",
-            ...data,
-          },
-        ];
+        updatedRecord = {
+          date: dateStr,
+          sleepHours: null,
+          busyHours: null,
+          steps: null,
+          exerciseDuration: null,
+          mood: null,
+          calories: null,
+          meals: [],
+          journalNote: "",
+          ...data,
+        };
+        return [...prev, updatedRecord];
       }
     });
+
+    const userId = session?.user ? ((session.user as any).id || session.user.email || "user") : "user";
+    if (updatedRecord) {
+      const recordPayload: DayRecord = updatedRecord;
+      fetch("/api/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          logDate: dateStr,
+          ...recordPayload,
+        }),
+      }).catch((err) => console.warn("Failed to sync calendar log to AWS DynamoDB:", err));
+    }
   };
 
   const resetInputs = () => {
@@ -409,7 +521,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setActivity("1.2");
     setWaist("");
     setBodyFat("");
-    setProfileName("Shreyash Raj");
+    setProfileName("User");
     setActivities([]);
     setSleepHours("");
     setActivityHours("");
@@ -522,7 +634,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       setActivities([]);
       setHistoryRecords(initialHistoryDays);
       setCompletedGuideItems({});
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(getAccountStorageKey(userEmail));
     }
   };
 
@@ -587,6 +699,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         purgeRecords,
         historyRecords,
         updateHistoryRecord,
+        fetchCalendarRecord,
         primaryGoal,
         setPrimaryGoal,
         stressLevel,

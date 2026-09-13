@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { signIn } from "next-auth/react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,8 +17,6 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-const DEMO_EMAIL = "demo@aurasync.local";
-const DEMO_PASSWORD = "AuraSync2026!";
 type StoredAccount = { name: string; email: string; password: string };
 
 interface AuthScreenProps {
@@ -29,8 +28,8 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
   const [mode, setMode] = useState<"signin" | "create" | "forgot">("signin");
   const [resetState, setResetState] = useState<"idle" | "loading" | "success">("idle");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -39,16 +38,9 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
     setResetState("idle");
     setError("");
     setMessage("");
-    if (nextMode === "signin") {
-      setEmail(DEMO_EMAIL);
-      setPassword(DEMO_PASSWORD);
-    } else if (nextMode === "create") {
-      setEmail("");
-      setPassword("");
-      setName("");
-    } else {
-      setEmail("");
-    }
+    setEmail("");
+    setPassword("");
+    setName("");
   };
 
   const handleSendReset = async (event?: FormEvent<HTMLFormElement>) => {
@@ -119,7 +111,7 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
 
     if (mode === "create") {
       if (name.trim().length < 2) {
-        setError("Enter your name to create an account.");
+        setError("Enter your full name or first name to create an account.");
         return;
       }
       if (password.length < 8) {
@@ -131,28 +123,62 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
         setError("An account with this email already exists.");
         return;
       }
-      localStorage.setItem(
-        "aurasync-accounts",
-        JSON.stringify([...accounts, { name: name.trim(), email: normalizedEmail, password }])
-      );
-      setMode("signin");
-      setEmail(normalizedEmail);
-      setPassword("");
-      setMessage("Account created successfully. Sign in to continue.");
+      const newAccount = { name: name.trim(), email: normalizedEmail, password };
+      localStorage.setItem("aurasync-accounts", JSON.stringify([...accounts, newAccount]));
+      localStorage.setItem("aurasync-user-name", name.trim());
+      localStorage.setItem("aurasync-session", normalizedEmail);
+      localStorage.setItem("aurasync-is-new-account", "true");
+
+      signIn("credentials", {
+        redirect: false,
+        email: normalizedEmail,
+        password,
+        name: name.trim(),
+      }).then(() => {
+        onSuccess();
+      }).catch(() => {
+        onSuccess();
+      });
       return;
     }
 
     // Sign In mode
-    const accounts: StoredAccount[] = JSON.parse(localStorage.getItem("aurasync-accounts") || "[]");
-    const validDemo = normalizedEmail === DEMO_EMAIL && password === DEMO_PASSWORD;
-    const validAccount = accounts.some((account) => account.email === normalizedEmail && account.password === password);
-
-    if (!validDemo && !validAccount) {
-      setError("Email or password not recognized.");
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+      setError("Please enter a valid email address.");
       return;
     }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+
+    const accounts: StoredAccount[] = JSON.parse(localStorage.getItem("aurasync-accounts") || "[]");
+    let accountName = normalizedEmail.split("@")[0];
+    if (accounts.length > 0) {
+      const match = accounts.find((account) => account.email === normalizedEmail && account.password === password);
+      if (!match) {
+        setError("Email or password not recognized.");
+        return;
+      }
+      accountName = match.name;
+    }
+    localStorage.setItem("aurasync-user-name", accountName);
     localStorage.setItem("aurasync-session", normalizedEmail);
-    onSuccess();
+
+    signIn("credentials", {
+      redirect: false,
+      email: normalizedEmail,
+      password,
+      name: accountName,
+    }).then((res) => {
+      if (res?.error) {
+        setError("Invalid email or password.");
+      } else {
+        onSuccess();
+      }
+    }).catch(() => {
+      onSuccess();
+    });
   };
 
   return (
@@ -267,14 +293,14 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
             >
               {mode === "create" && (
                 <label className="block">
-                  <span className="mb-2 block text-xs text-slate-400">Your name</span>
+                  <span className="mb-2 block text-xs text-slate-400">Full Name</span>
                   <span className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-4 focus-within:ring-1 focus-within:ring-cyan-500">
                     <UserRound size={15} className="text-slate-500" />
                     <input
                       required
                       value={name}
                       onChange={(event) => setName(event.target.value)}
-                      placeholder="Shreyash Raj"
+                      placeholder="Enter your full name"
                       className="w-full bg-transparent py-2.5 text-sm text-white outline-none placeholder:text-slate-600"
                     />
                   </span>
@@ -291,7 +317,7 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
                     disabled={mode === "forgot" && resetState === "loading"}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
+                    placeholder="Enter your email address"
                     className="w-full bg-transparent py-2.5 text-sm text-white outline-none placeholder:text-slate-600 disabled:opacity-50"
                   />
                 </span>
@@ -406,12 +432,6 @@ export function AuthScreen({ onSuccess, onBack }: AuthScreenProps) {
             </button>
           )}
         </div>
-
-        {mode === "signin" && (
-          <p className="mt-4 border-t border-slate-800 pt-4 text-center text-[11px] text-slate-500">
-            Demo: <span className="text-slate-300">{DEMO_EMAIL}</span> · <span className="text-slate-300">{DEMO_PASSWORD}</span>
-          </p>
-        )}
       </motion.div>
     </main>
   );

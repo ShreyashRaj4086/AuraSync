@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock3, ShieldCheck } from "lucide-react";
+import { formatDisplayName, getFirstName } from "@/lib/utils";
 import { Navigation } from "@/components/Navigation";
 import { useDashboard } from "@/components/dashboard/DashboardContext";
 import {
@@ -80,7 +81,7 @@ export function CalorieScanner({
                 <span className="h-1.5 w-1.5 rounded-full bg-cyan-200" /> Executive workspace
               </div>
               <h1 className="text-3xl font-medium tracking-[-0.04em] sm:text-4xl text-slate-100">
-                {isSetupLocked ? `Welcome, ${dashboard.profileName || "Shreyash"}` : titles[visibleView] ?? "Workspace"}
+                {isSetupLocked ? `Welcome, ${getFirstName(dashboard.profileName)}!` : titles[visibleView] ?? "Workspace"}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">
                 {isSetupLocked ? "Complete your baseline to unlock your personalized AuraSync workspace." : subtitles[visibleView] ?? "Explore your daily wellbeing signals."}
